@@ -1,0 +1,4 @@
+# The stream key must NEVER land in this repo (it lives on the USB stick / in
+# ~/Library/Application Support). Belt-and-suspenders:
+service.json
+service.json.bak
