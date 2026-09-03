@@ -1,0 +1,51 @@
+#!/bin/bash
+# slopcomputer.app — double-clickable Desktop launcher for the show rig.
+#
+# Thin wrapper: it confirms, then hands off to run-show.sh in the repo. All the
+# real logic (quit Chrome/OBS, position windows, patch the OBS capture source,
+# force 1080p, launch OBS) lives there — this file must never grow a second copy
+# of it.
+#
+# REPO_DIR is stamped in by install.sh when it installs this bundle to the
+# Desktop. The fallbacks cover a bundle that was copied by hand.
+
+set -u
+
+REPO_DIR="__REPO_DIR__"
+
+# Fallbacks if the stamp never happened (hand-copied bundle).
+if [ ! -x "$REPO_DIR/run-show.sh" ]; then
+  for c in \
+    "$HOME/clawd/clawd-harness/projects/clawd-slop-obs" \
+    "$HOME/clawd-slop-obs" \
+    "$HOME/Documents/clawd-slop-obs" \
+    "$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)"; do
+    [ -x "$c/run-show.sh" ] && REPO_DIR="$c" && break
+  done
+fi
+
+# The show URL. Override for a real show with tokens:
+#   SLOP_URL='https://live.slop.computer/<room>?invite=…&godMode=…' open -a slopcomputer
+URL="${SLOP_URL:-https://live.slop.computer}"
+
+dialog(){ # $1=text  $2=icon  -> best-effort, never blocks the launch on failure
+  osascript -e "tell application \"System Events\" to display dialog \"$1\" with title \"slop.computer\" with icon $2 buttons {\"OK\"} default button 1" >/dev/null 2>&1
+}
+
+if [ ! -x "$REPO_DIR/run-show.sh" ]; then
+  dialog "Can't find run-show.sh.\n\nExpected it at:\n$REPO_DIR\n\nRe-run install.sh from the clawd-slop-obs repo to re-stamp this launcher." stop
+  exit 1
+fi
+
+# Confirm before we go — this quits Chrome (all windows, not just the show
+# profile), so an accidental double-click mid-work should be recoverable.
+ANSWER=$(osascript 2>/dev/null <<A
+tell application "System Events"
+  activate
+  display dialog "Start the slop.computer show rig?" & return & return & "This QUITS Chrome and OBS, then relaunches them for the show." & return & return & "URL: $URL" with title "slop.computer" with icon caution buttons {"Cancel", "Start show"} default button "Start show" cancel button "Cancel"
+end tell
+A
+)
+[ -z "$ANSWER" ] && exit 0   # cancelled (or no dialog available)
+
+exec "$REPO_DIR/run-show.sh" "$URL"

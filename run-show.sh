@@ -14,6 +14,12 @@
 # scene collection's window-capture source, force 1080p, launch OBS, and
 # re-assert the OBS window geometry to beat OBS's startup restore.
 #
+# It also opens the gesture EYE (the same URL + &fx=0, titled SLOP-EYE) as a
+# second window of the same Chrome, at the exact bounds of the MAIN window,
+# stacked behind it. The always-running slop-detector latches onto that title;
+# the page lays every camera out large for detection (EyeStage). Occlusion
+# flags keep the hidden eye painting. No more clicking 👁 per show.
+#
 # Bounds are AppleScript order {left, top, right, bottom}.
 
 set -u
@@ -36,7 +42,7 @@ fi
 # ============================ CONFIG ============================
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 OBS_APP="/Applications/OBS.app"
-PROFILE_DIR="/Users/clawd/.openclaw/browser/openclaw/user-data"
+PROFILE_DIR="${SLOP_PROFILE_DIR:-$HOME/.openclaw/browser/openclaw/user-data}"
 SCENES="$HOME/Library/Application Support/obs-studio/basic/scenes"
 
 # The show URL: arg 1 > $SLOP_URL > the old default (/another).
@@ -91,10 +97,16 @@ sleep 1
 
 # ---- 2. Launch Chrome MAIN (normal window, with remote-debugging like the live rig) ----
 log "Launching MAIN window..."
+# The three --disable-* flags keep an occluded window painting at full rate:
+# the EYE sits entirely behind MAIN, and Chrome otherwise stops rendering it
+# (stale capture, no hands).
 nohup arch -arm64 "$CHROME" \
   --user-data-dir="$PROFILE_DIR" --profile-directory=Default \
   --remote-debugging-port=18800 --remote-allow-origins='*' \
   --no-first-run --no-default-browser-check \
+  --disable-backgrounding-occluded-windows \
+  --disable-renderer-backgrounding \
+  --disable-background-timer-throttling \
   --new-window "$URL_MAIN" >/dev/null 2>&1 &
 sleep 3
 
@@ -104,7 +116,7 @@ sleep 3
 log "Waiting for the slop page to load (CDP :18800)..."
 for i in $(seq 1 20); do
   curl -s http://localhost:18800/json 2>/dev/null \
-    | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if any('live.slop.computer' in (t.get('url') or '') and t.get('type')=='page' for t in d) else 1)" 2>/dev/null \
+    | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if any('live.slop.computer' in (t.get('url') or '') and 'fx=0' not in (t.get('url') or '') and t.get('type')=='page' for t in d) else 1)" 2>/dev/null \
     && { log "  slop page is up."; break; }
   sleep 1
 done
@@ -119,7 +131,7 @@ tell application "Google Chrome"
     -- host match (survives 307 path redirects) but exclude the EQ overlay window,
     -- which also lives on live.slop.computer and would otherwise get sized to the
     -- capture dimensions and become ambiguous with the main room window.
-    if (u contains "live.slop.computer") and (u does not contain "/eq") then
+    if (u contains "live.slop.computer") and (u does not contain "/eq") and (u does not contain "fx=0") then
       set bounds of w to {$MAIN_L, $MAIN_T, $MAIN_R, $MAIN_B}
     end if
   end repeat
@@ -140,7 +152,9 @@ var bySize = 0, byPos = 0, wideID = 0, wideW = 0
 for w in ws {
   let owner = (w[kCGWindowOwnerName as String] as? String) ?? ""
   let layer = (w[kCGWindowLayer as String] as? Int) ?? -1
+  let name  = (w[kCGWindowName as String] as? String) ?? ""
   if layer != 0 || !owner.contains("Chrome") { continue }
+  if name.contains("SLOP-EYE") { continue }   // the eye is the same size on purpose
   guard let b = w[kCGWindowBounds as String] as? [String:Any] else { continue }
   let x  = b["X"] as? Int ?? -99999
   let y  = b["Y"] as? Int ?? -99999
@@ -156,6 +170,61 @@ SWIFT
 )
 log "MAIN_ID=$MAIN_ID (matched by size ${TGTW}x${TGTH})"
 [ "${MAIN_ID:-0}" = "0" ]  && log "WARNING: could not find MAIN window id"
+
+# ---- 4b. Open the EYE: same URL + fx=0, same Chrome, same bounds, behind MAIN.
+#          Opened only AFTER MAIN_ID is read, so two same-size windows can't
+#          confuse the matcher (it also skips SLOP-EYE titles). ----
+case "$URL_MAIN" in *\?*) URL_EYE="$URL_MAIN&fx=0";; *) URL_EYE="$URL_MAIN?fx=0";; esac
+log "Opening EYE window (fx=0)..."
+"$CHROME" --user-data-dir="$PROFILE_DIR" --profile-directory=Default \
+  --new-window "$URL_EYE" >/dev/null 2>&1 &
+for i in $(seq 1 20); do
+  curl -s http://localhost:18800/json 2>/dev/null \
+    | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if any('fx=0' in (t.get('url') or '') and t.get('type')=='page' for t in d) else 1)" 2>/dev/null \
+    && { log "  eye page is up."; break; }
+  sleep 1
+done
+sleep 1
+osascript <<APPLESCRIPT >/dev/null 2>&1
+tell application "Google Chrome"
+  repeat with w in windows
+    set u to ""
+    try
+      set u to URL of active tab of w
+    end try
+    if (u contains "fx=0") then set bounds of w to {$MAIN_L, $MAIN_T, $MAIN_R, $MAIN_B}
+  end repeat
+  -- MAIN back on top; the eye keeps painting behind it (occlusion flags).
+  repeat with w in windows
+    set u to ""
+    try
+      set u to URL of active tab of w
+    end try
+    if (u contains "live.slop.computer") and (u does not contain "/eq") and (u does not contain "fx=0") then set index of w to 1
+  end repeat
+end tell
+APPLESCRIPT
+# The page retitles itself SLOP-EYE after mount; wait for it so the log proves
+# the detector has something to latch onto.
+EYE_ID=0
+for i in $(seq 1 15); do
+  EYE_ID=$(swift - <<'SWIFT' 2>/dev/null
+import Cocoa
+let ws = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as! [[String:Any]]
+var found = 0
+for w in ws {
+  let owner = (w[kCGWindowOwnerName as String] as? String) ?? ""
+  let name  = (w[kCGWindowName as String] as? String) ?? ""
+  if owner.contains("Chrome") && name.contains("SLOP-EYE") { found = (w[kCGWindowNumber as String] as? Int) ?? 0 }
+}
+print(found)
+SWIFT
+)
+  [ "${EYE_ID:-0}" != "0" ] && break
+  sleep 1
+done
+log "EYE_ID=$EYE_ID (title SLOP-EYE; detector log: /tmp/slop-eye-detector.log)"
+[ "${EYE_ID:-0}" = "0" ] && log "WARNING: no SLOP-EYE window appeared — gestures will not work"
 
 # ---- 5. Patch the OBS scene collection's window-capture source ----
 patch_collection(){ # $1=collection name  $2=window id
@@ -296,6 +365,37 @@ log "  OBS $COLL_MAIN ($PID_MAIN) x=$MX (target $OBS_MAIN_X)"
 case "$ERR_MAIN" in
   *"not allowed"*|*-1719*) log "  NOTE: Accessibility denied for this app -> System Settings > Privacy & Security > Accessibility, enable your terminal.";;
 esac
+
+# ---- 8. Prove the gesture chain from the relay's side: POST an empty hands
+#         frame with the god key (= the URL's godMode token) and log the eye
+#         geometry the relay is mapping against. ----
+GOD_KEY=$(printf '%s' "$URL_MAIN" | sed -nE 's/.*[?&]godMode=([^&]+).*/\1/p')
+if [ -n "$GOD_KEY" ]; then
+  log "Checking relay eye geometry..."
+  GEOM=""
+  for i in $(seq 1 15); do
+    GEOM=$(curl -s -m 5 -X POST -H "X-Gesture-Key: $GOD_KEY" -H 'Content-Type: application/json' \
+      -d '{"hands":[],"w":0,"h":0}' https://live.slop.computer/v1/hands 2>/dev/null)
+    case "$GEOM" in *'"geom"'*) break;; esac
+    sleep 2
+  done
+  python3 - "$GEOM" <<'PYGEOM' 2>&1 | tee -a "$LOG"
+import json, sys
+try:
+    d = json.loads(sys.argv[1] or "{}")
+except Exception:
+    d = {}
+g = d.get("geom")
+if not g:
+    print(f"  relay: {d.get('note') or d.get('error') or 'no response'} -> gestures NOT wired (eye page not reporting?)")
+else:
+    cams = g.get("cams") or []
+    print(f"  relay: eye viewport {g.get('vw')}x{g.get('vh')}, {len(cams)} camera(s) visible to the detector, geometry age {g.get('ageMs')}ms")
+    for c in cams:
+        r = c.get("rect") or {}
+        print(f"    cam {c.get('peerId','?')[:12]} rect {int(r.get('x',0))},{int(r.get('y',0))} {int(r.get('w',0))}x{int(r.get('h',0))} video {c.get('videoW')}x{c.get('videoH')}")
+PYGEOM
+fi
 
 log "Done. Open the EQ window yourself if needed (live.slop.computer/eq?slug=demo)."
 log "Full log: $LOG"

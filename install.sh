@@ -55,10 +55,35 @@ for f in global.ini user.ini; do
   if [ ! -f "$OBS_DIR/$f" ]; then cp "obs-config/$f" "$OBS_DIR/$f"; echo "  seeded $f"; fi
 done
 
+# The committed config was captured on a machine whose home was /Users/clawd.
+# Rewrite those absolute paths to THIS machine's $HOME, or OBS looks for its
+# scenes/profile under a home that doesn't exist here (and records to a missing
+# Movies dir). No-op on the original box, where $HOME is already /Users/clawd.
+if [ "$HOME" != "/Users/clawd" ]; then
+  for f in "$OBS_DIR/global.ini" "$PROFILE_DIR/basic.ini"; do
+    [ -f "$f" ] && sed -i '' "s|/Users/clawd/|$HOME/|g" "$f"
+  done
+  echo "  rewrote /Users/clawd -> $HOME in global.ini + basic.ini"
+fi
+
 # ---- 4. Install the stream key ----
 if [ -n "$CRED" ]; then
   cp "$CRED" "$PROFILE_DIR/service.json"
   echo "Installed stream key from: $CRED"
+fi
+
+# ---- 4b. Install the Desktop launcher ----
+# A double-clickable .app that just calls run-show.sh. The repo path is stamped
+# in here, so the bundle keeps working wherever the Desktop copy ends up.
+if [ -d launcher/slopcomputer.app ]; then
+  DESK_APP="$HOME/Desktop/slopcomputer.app"
+  rm -rf "$DESK_APP"
+  cp -R launcher/slopcomputer.app "$DESK_APP"
+  sed -i '' "s|__REPO_DIR__|$(pwd)|" "$DESK_APP/Contents/MacOS/launch"
+  chmod +x "$DESK_APP/Contents/MacOS/launch"
+  # Bust the LaunchServices cache so a replaced bundle isn't run from stale info.
+  touch "$DESK_APP"
+  echo "Installed Desktop launcher -> $DESK_APP (points at $(pwd))"
 fi
 
 # ---- 5. Sanity checks ----

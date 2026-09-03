@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>slopcomputer</string>
+	<key>CFBundleDisplayName</key>
+	<string>slop.computer show</string>
+	<key>CFBundleIdentifier</key>
+	<string>computer.slop.showlauncher</string>
+	<key>CFBundleExecutable</key>
+	<string>launch</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<!-- No UI of its own: it fires run-show.sh and exits. Keeping it out of the
+	     Dock/switcher means a double-click doesn't leave a dead icon bouncing. -->
+	<key>LSBackgroundOnly</key>
+	<true/>
+	<!-- run-show.sh drives System Events to position the Chrome + OBS windows,
+	     so this bundle is the app macOS will ask to grant Accessibility to. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Positions the Chrome and OBS windows for the show.</string>
+</dict>
+</plist>
