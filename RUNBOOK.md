@@ -50,20 +50,25 @@ repo) is NOT used and need not be running.
    positions it to 1706×1045, reads the fresh CGWindowID, patches it into the
    OBS `Untitled` collection's window-capture source, opens the EYE window
    (same URL + `&fx=0`) at the same bounds behind the main window, forces
-   1080p, launches OBS, re-asserts OBS geometry, and finally asks the relay
-   what eye geometry it sees.
+   1080p, launches OBS, re-asserts OBS geometry, asks the relay what eye
+   geometry it sees, and last opens the EQ window
+   (`live.slop.computer/eq?slug=<room>`, slug taken from the show URL) as a
+   third Chrome window, unpositioned, on top.
 
    Watch `/tmp/slopcomputer.log` until the `Done.` line. A healthy run logs a
    nonzero `MAIN_ID`, `set window=<id> on 1 source(s)`, a nonzero `EYE_ID`,
-   and `relay: eye viewport WxH, N camera(s) visible to the detector`.
+   `relay: eye viewport WxH, N camera(s) visible to the detector`, and
+   `eq page is up.`
 
 2. **The 👁 button is now a fallback only.** run-show opens the eye. If you
    ever need to reopen it by hand, click 👁 in the god-mode menu bar — it
    opens at the god window's viewport size. Never open it *before*
    run-show: the script quits all of Chrome.
 
-3. **Open the EQ window** (`live.slop.computer/eq?slug=<room>`). run-show.sh
-   deliberately never positions or resizes `/eq` windows.
+3. **The EQ window is opened by run-show too** (since 2026-09-14). It is the
+   operator's control surface, so the script never positions or resizes it.
+   If the log says `WARNING: EQ window did not appear`, open
+   `live.slop.computer/eq?slug=<room>` by hand in the same Chrome.
 
 No permission dialogs should appear at any step once the machine is set up
 (see "Standing machine state" below).

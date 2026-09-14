@@ -20,6 +20,10 @@
 # the page lays every camera out large for detection (EyeStage). Occlusion
 # flags keep the hidden eye painting. No more clicking 👁 per show.
 #
+# Finally it opens the EQ window (live.slop.computer/eq?slug=<room>) as a third
+# window of the same Chrome, unpositioned, on top — the operator's control
+# surface. Every window a show needs comes from this one script.
+#
 # Bounds are AppleScript order {left, top, right, bottom}.
 
 set -u
@@ -397,5 +401,28 @@ else:
 PYGEOM
 fi
 
-log "Done. Open the EQ window yourself if needed (live.slop.computer/eq?slug=demo)."
+# ---- 9. Open the EQ window (live.slop.computer/eq?slug=<room>) in the same
+#         Chrome. Opened LAST, after MAIN_ID is read and OBS is placed, so it
+#         can never confuse the window matcher (which also skips /eq URLs).
+#         Deliberately NOT positioned or resized: it is the operator's own
+#         control surface and stays wherever Chrome puts it, on top. ----
+ROOM_SLUG=$(printf '%s' "$URL_MAIN" | sed -nE 's#^https?://[^/]+/([^/?]+).*#\1#p')
+if [ -n "$ROOM_SLUG" ]; then
+  URL_EQ="https://live.slop.computer/eq?slug=$ROOM_SLUG"
+  log "Opening EQ window ($URL_EQ)..."
+  "$CHROME" --user-data-dir="$PROFILE_DIR" --profile-directory=Default \
+    --new-window "$URL_EQ" >/dev/null 2>&1 &
+  EQ_UP=0
+  for i in $(seq 1 20); do
+    curl -s http://localhost:18800/json 2>/dev/null \
+      | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if any('/eq' in (t.get('url') or '') and t.get('type')=='page' for t in d) else 1)" 2>/dev/null \
+      && { EQ_UP=1; log "  eq page is up."; break; }
+    sleep 1
+  done
+  [ "$EQ_UP" = "0" ] && log "WARNING: EQ window did not appear -> open $URL_EQ by hand"
+else
+  log "WARNING: could not derive room slug from URL_MAIN -> open the EQ window by hand"
+fi
+
+log "Done."
 log "Full log: $LOG"
