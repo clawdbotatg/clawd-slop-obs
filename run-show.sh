@@ -20,10 +20,9 @@
 # the page lays every camera out large for detection (EyeStage). Occlusion
 # flags keep the hidden eye painting. No more clicking 👁 per show.
 #
-# Finally it opens the EQ window (live.slop.computer/eq?slug=<room>) as a third
-# window of the same Chrome, on top, at one initial narrow+tall size so the
-# sliders are visible (at the room window's size the page shows only its
-# stream preview). Every window a show needs comes from this one script.
+# Finally it opens the EQ (live.slop.computer/eq?slug=<room>) the way the
+# room's 🔊 button does: a 150x760 popup, opened by the room tab itself over
+# CDP. Every window a show needs comes from this one script.
 #
 # Bounds are AppleScript order {left, top, right, bottom}.
 
@@ -402,49 +401,45 @@ else:
 PYGEOM
 fi
 
-# ---- 9. Open the EQ window (live.slop.computer/eq?slug=<room>) in the same
-#         Chrome. Opened LAST, after MAIN_ID is read and OBS is placed, so it
-#         can never confuse the window matcher (which also skips /eq URLs).
-#         Chrome opens it at the LAST window's size (1706x1045) and at that
-#         size the page's stream preview swallows the whole viewport: all you
-#         see is a black "STREAM" monitor, the EQ sliders are below the fold
-#         (2026-09-14, looked like "a second video monitor" on a live show).
-#         So it gets ONE initial size, narrow + tall, where the whole EQ is
-#         visible (verified 640x1000). After that it's the operator's window:
-#         nothing here ever touches it again. ----
-EQ_L=0; EQ_T=30; EQ_R=640; EQ_B=1030
+# ---- 9. Open the EQ exactly the way the room page's 🔊 button does: ask the
+#         room tab (over CDP, the same :18800 port used above) to run the
+#         page's own window.open("/eq?slug=<room>", "slop-eq", popup 150x760).
+#         A popup has no tab strip / toolbar so it can be that narrow; a
+#         normal --new-window can't shrink below ~500px and at the room
+#         window's size the /eq page shows only its stream preview (looked
+#         like "a second video monitor" on a live show, 2026-09-14). Same
+#         window name as the button, so a later 🔊 click reuses this popup
+#         instead of opening a second one. Opened LAST, after MAIN_ID is
+#         read (the matcher also skips /eq URLs). Never positioned or
+#         resized here: it is the operator's window. ----
 ROOM_SLUG=$(printf '%s' "$URL_MAIN" | sed -nE 's#^https?://[^/]+/([^/?]+).*#\1#p')
 if [ -n "$ROOM_SLUG" ]; then
-  URL_EQ="https://live.slop.computer/eq?slug=$ROOM_SLUG"
-  log "Opening EQ window ($URL_EQ)..."
-  "$CHROME" --user-data-dir="$PROFILE_DIR" --profile-directory=Default \
-    --new-window "$URL_EQ" >/dev/null 2>&1 &
+  log "Opening EQ popup (/eq?slug=$ROOM_SLUG via the room tab)..."
+  EQ_RES=$(SLUG="$ROOM_SLUG" node --input-type=module - <<'NODE' 2>&1
+const slug = process.env.SLUG;
+const list = await (await fetch('http://localhost:18800/json')).json();
+const room = list.find(t => t.type === 'page' && t.url.includes('live.slop.computer/') && !t.url.includes('fx=0') && !t.url.includes('/eq'));
+if (!room) { console.log('no room tab on CDP'); process.exit(1); }
+const ws = new WebSocket(room.webSocketDebuggerUrl);
+await new Promise(r => ws.onopen = r);
+const expr = `window.open("/eq?slug=${encodeURIComponent(slug)}", "slop-eq", "popup=yes,width=150,height=760,menubar=no,toolbar=no,location=no,status=no") ? "opened" : "blocked"`;
+ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression: expr, userGesture: true, returnByValue: true } }));
+const res = await new Promise(r => ws.onmessage = e => r(JSON.parse(e.data)));
+console.log(res.result?.result?.value ?? JSON.stringify(res));
+ws.close();
+NODE
+)
+  log "  window.open -> $EQ_RES"
   EQ_UP=0
   for i in $(seq 1 20); do
     curl -s http://localhost:18800/json 2>/dev/null \
       | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if any('/eq' in (t.get('url') or '') and t.get('type')=='page' for t in d) else 1)" 2>/dev/null \
-      && { EQ_UP=1; log "  eq page is up."; break; }
+      && { EQ_UP=1; log "  eq popup is up (150x760, same as the 🔊 button)."; break; }
     sleep 1
   done
-  if [ "$EQ_UP" = "1" ]; then
-    sleep 1
-    osascript <<APPLESCRIPT >/dev/null 2>&1
-tell application "Google Chrome"
-  repeat with w in windows
-    set u to ""
-    try
-      set u to URL of active tab of w
-    end try
-    if (u contains "/eq") then set bounds of w to {$EQ_L, $EQ_T, $EQ_R, $EQ_B}
-  end repeat
-end tell
-APPLESCRIPT
-    log "  eq window sized $((EQ_R-EQ_L))x$((EQ_B-EQ_T)) (initial size only; move it where you like)"
-  else
-    log "WARNING: EQ window did not appear -> open $URL_EQ by hand"
-  fi
+  [ "$EQ_UP" = "0" ] && log "WARNING: EQ popup did not appear -> click 🔊 in the room's menu bar"
 else
-  log "WARNING: could not derive room slug from URL_MAIN -> open the EQ window by hand"
+  log "WARNING: could not derive room slug from URL_MAIN -> click 🔊 in the room's menu bar"
 fi
 
 log "Done."

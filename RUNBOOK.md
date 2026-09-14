@@ -51,9 +51,9 @@ repo) is NOT used and need not be running.
    OBS `Untitled` collection's window-capture source, opens the EYE window
    (same URL + `&fx=0`) at the same bounds behind the main window, forces
    1080p, launches OBS, re-asserts OBS geometry, asks the relay what eye
-   geometry it sees, and last opens the EQ window
-   (`live.slop.computer/eq?slug=<room>`, slug taken from the show URL) as a
-   third Chrome window, on top, sized once to 640×1000 at the left edge.
+   geometry it sees, and last opens the EQ (`/eq?slug=<room>`, slug taken
+   from the show URL) as the same 150×760 popup the room's 🔊 button opens,
+   by asking the room tab over CDP to run that `window.open`.
 
    Watch `/tmp/slopcomputer.log` until the `Done.` line. A healthy run logs a
    nonzero `MAIN_ID`, `set window=<id> on 1 source(s)`, a nonzero `EYE_ID`,
@@ -65,15 +65,17 @@ repo) is NOT used and need not be running.
    opens at the god window's viewport size. Never open it *before*
    run-show: the script quits all of Chrome.
 
-3. **The EQ window is opened by run-show too** (since 2026-09-14). The
-   script gives it one initial size (640×1000: narrow and tall, so the
-   master bands, amp, sources and video panels are all visible) and never
-   touches it again; drag it wherever you like. **Why the size matters:** at
-   the room window's size the page's stream preview fills the whole
-   viewport and the EQ sliders sit below the fold, so it looks like a black
-   "second video monitor" (this bit a live show on 2026-09-14). If the log
-   says `WARNING: EQ window did not appear`, open
-   `live.slop.computer/eq?slug=<room>` by hand in the same Chrome.
+3. **The EQ is opened by run-show too** (since 2026-09-14), and it is the
+   *same* popup the room's 🔊 menu-bar button opens: `window.open("/eq?slug=
+   <room>", "slop-eq", popup 150×760)`, run inside the room tab over CDP.
+   Same window name, so clicking 🔊 later focuses this popup instead of
+   opening a second EQ. The script never positions or resizes it.
+   **Why a popup, not a window:** a popup has no tab strip or toolbar, so it
+   can be 150 px wide; a normal Chrome window can't shrink below ~500 px, and
+   at the room window's size the `/eq` page shows only its stream preview
+   with the sliders below the fold (a black "second video monitor": this bit
+   a live show on 2026-09-14). If the log says `WARNING: EQ popup did not
+   appear`, click 🔊 in the room's menu bar.
 
 No permission dialogs should appear at any step once the machine is set up
 (see "Standing machine state" below).
