@@ -53,7 +53,7 @@ repo) is NOT used and need not be running.
    1080p, launches OBS, re-asserts OBS geometry, asks the relay what eye
    geometry it sees, and last opens the EQ window
    (`live.slop.computer/eq?slug=<room>`, slug taken from the show URL) as a
-   third Chrome window, unpositioned, on top.
+   third Chrome window, on top, sized once to 640×1000 at the left edge.
 
    Watch `/tmp/slopcomputer.log` until the `Done.` line. A healthy run logs a
    nonzero `MAIN_ID`, `set window=<id> on 1 source(s)`, a nonzero `EYE_ID`,
@@ -65,9 +65,14 @@ repo) is NOT used and need not be running.
    opens at the god window's viewport size. Never open it *before*
    run-show: the script quits all of Chrome.
 
-3. **The EQ window is opened by run-show too** (since 2026-09-14). It is the
-   operator's control surface, so the script never positions or resizes it.
-   If the log says `WARNING: EQ window did not appear`, open
+3. **The EQ window is opened by run-show too** (since 2026-09-14). The
+   script gives it one initial size (640×1000: narrow and tall, so the
+   master bands, amp, sources and video panels are all visible) and never
+   touches it again; drag it wherever you like. **Why the size matters:** at
+   the room window's size the page's stream preview fills the whole
+   viewport and the EQ sliders sit below the fold, so it looks like a black
+   "second video monitor" (this bit a live show on 2026-09-14). If the log
+   says `WARNING: EQ window did not appear`, open
    `live.slop.computer/eq?slug=<room>` by hand in the same Chrome.
 
 No permission dialogs should appear at any step once the machine is set up

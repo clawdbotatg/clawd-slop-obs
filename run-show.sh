@@ -21,8 +21,9 @@
 # flags keep the hidden eye painting. No more clicking 👁 per show.
 #
 # Finally it opens the EQ window (live.slop.computer/eq?slug=<room>) as a third
-# window of the same Chrome, unpositioned, on top — the operator's control
-# surface. Every window a show needs comes from this one script.
+# window of the same Chrome, on top, at one initial narrow+tall size so the
+# sliders are visible (at the room window's size the page shows only its
+# stream preview). Every window a show needs comes from this one script.
 #
 # Bounds are AppleScript order {left, top, right, bottom}.
 
@@ -404,8 +405,14 @@ fi
 # ---- 9. Open the EQ window (live.slop.computer/eq?slug=<room>) in the same
 #         Chrome. Opened LAST, after MAIN_ID is read and OBS is placed, so it
 #         can never confuse the window matcher (which also skips /eq URLs).
-#         Deliberately NOT positioned or resized: it is the operator's own
-#         control surface and stays wherever Chrome puts it, on top. ----
+#         Chrome opens it at the LAST window's size (1706x1045) and at that
+#         size the page's stream preview swallows the whole viewport: all you
+#         see is a black "STREAM" monitor, the EQ sliders are below the fold
+#         (2026-09-14, looked like "a second video monitor" on a live show).
+#         So it gets ONE initial size, narrow + tall, where the whole EQ is
+#         visible (verified 640x1000). After that it's the operator's window:
+#         nothing here ever touches it again. ----
+EQ_L=0; EQ_T=30; EQ_R=640; EQ_B=1030
 ROOM_SLUG=$(printf '%s' "$URL_MAIN" | sed -nE 's#^https?://[^/]+/([^/?]+).*#\1#p')
 if [ -n "$ROOM_SLUG" ]; then
   URL_EQ="https://live.slop.computer/eq?slug=$ROOM_SLUG"
@@ -419,7 +426,23 @@ if [ -n "$ROOM_SLUG" ]; then
       && { EQ_UP=1; log "  eq page is up."; break; }
     sleep 1
   done
-  [ "$EQ_UP" = "0" ] && log "WARNING: EQ window did not appear -> open $URL_EQ by hand"
+  if [ "$EQ_UP" = "1" ]; then
+    sleep 1
+    osascript <<APPLESCRIPT >/dev/null 2>&1
+tell application "Google Chrome"
+  repeat with w in windows
+    set u to ""
+    try
+      set u to URL of active tab of w
+    end try
+    if (u contains "/eq") then set bounds of w to {$EQ_L, $EQ_T, $EQ_R, $EQ_B}
+  end repeat
+end tell
+APPLESCRIPT
+    log "  eq window sized $((EQ_R-EQ_L))x$((EQ_B-EQ_T)) (initial size only; move it where you like)"
+  else
+    log "WARNING: EQ window did not appear -> open $URL_EQ by hand"
+  fi
 else
   log "WARNING: could not derive room slug from URL_MAIN -> open the EQ window by hand"
 fi
