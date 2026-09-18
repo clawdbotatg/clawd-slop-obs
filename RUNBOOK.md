@@ -126,6 +126,16 @@ front and look at it; it should show black with the camera tiles on it and
 a `SLOP-EYE · <room> · N cams` stamp bottom-right (once the EyeStage deploy
 is live; before that it shows a copy of the room).
 
+**`0 camera(s) visible to the detector` while the captured window plainly
+shows a camera tile** — look again: while the room is OFF AIR the room page
+draws its *published card* (`/v1/cards/<room>/published.png`, one big `<img>`)
+over the desktop, and that poster contains fake camera windows, a guest list
+and a SLOPAMP timer that never ticks. Nothing in it is live. The eye's count
+is right: nobody has a camera up yet. It flips to `N cams` (and the eye
+window shows real tiles) the moment a guest publishes video; the poster goes
+away when the room goes ON AIR. Don't debug the eye against the poster
+(cost an hour on 2026-09-18).
+
 **Detector healthy but no shapes on stream** — most likely a stale god key:
 a new show URL carries a *different* `godMode` token and the relay silently
 rejects the landmark posts (the detector does not log auth failures). Fix:
